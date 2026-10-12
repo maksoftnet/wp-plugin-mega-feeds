@@ -1,0 +1,11 @@
+# Editor and OS noise
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Build / release artifacts
+/dist/
+*.zip
+*.log
+/vendor/
