@@ -11,7 +11,7 @@ other platforms pull it.
 | `rss` | `/rss/` newest changes of every type | available |
 | `rss` | `/rss/posts/`, `/rss/pages/`, `/rss/products/` | available |
 | `glami` | `/glami/` | available |
-| `pazaruvaj` | - | waiting for the format specification |
+| `pazaruvaj` | `/pazaruvaj/` | available |
 | `maksoft-cms` | - | planned |
 
 Without pretty permalinks every address also works as

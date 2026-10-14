@@ -191,6 +191,33 @@ class SettingsPage {
 					</tr>
 				</table>
 
+				<h2><?php esc_html_e( 'Pazaruvaj', 'mega-feeds' ); ?></h2>
+				<table class="form-table" role="presentation">
+					<tr>
+						<th scope="row"><label for="mf-paz-days"><?php esc_html_e( 'Delivery time (days)', 'mega-feeds' ); ?></label></th>
+						<td><input id="mf-paz-days" type="number" min="1" max="60" class="small-text"
+							name="<?php echo esc_attr( $name ); ?>[pazaruvaj_delivery_days]" value="<?php echo esc_attr( $settings['pazaruvaj_delivery_days'] ); ?>">
+							<p class="description"><?php esc_html_e( 'Sent for items in stock. Sold-out items are sent with NO.', 'mega-feeds' ); ?></p></td>
+					</tr>
+					<tr>
+						<th scope="row"><label for="mf-paz-cost"><?php esc_html_e( 'Delivery cost', 'mega-feeds' ); ?></label></th>
+						<td><input id="mf-paz-cost" type="text" class="small-text"
+							name="<?php echo esc_attr( $name ); ?>[pazaruvaj_delivery_cost]" value="<?php echo esc_attr( $settings['pazaruvaj_delivery_cost'] ); ?>">
+							<p class="description"><?php esc_html_e( 'A number (5, 5 EUR) or Free. Empty omits the field.', 'mega-feeds' ); ?></p></td>
+					</tr>
+					<tr>
+						<th scope="row"><?php esc_html_e( 'Manufacturer code', 'mega-feeds' ); ?></th>
+						<td>
+							<label><input type="radio" name="<?php echo esc_attr( $name ); ?>[pazaruvaj_product_number]" value="none" <?php checked( 'none', $settings['pazaruvaj_product_number'] ); ?>> <?php esc_html_e( 'Do not send', 'mega-feeds' ); ?></label><br>
+							<label><input type="radio" name="<?php echo esc_attr( $name ); ?>[pazaruvaj_product_number]" value="sku" <?php checked( 'sku', $settings['pazaruvaj_product_number'] ); ?>> <?php esc_html_e( 'Send the SKU as ProductNumber (only if the SKU is the manufacturer code)', 'mega-feeds' ); ?></label>
+						</td>
+					</tr>
+					<tr>
+						<th scope="row"><?php esc_html_e( 'Sold-out items', 'mega-feeds' ); ?></th>
+						<td><label><input type="checkbox" name="<?php echo esc_attr( $name ); ?>[pazaruvaj_include_oos]" value="1" <?php checked( ! empty( $settings['pazaruvaj_include_oos'] ) ); ?>> <?php esc_html_e( 'Include them (DeliveryTime NO)', 'mega-feeds' ); ?></label></td>
+					</tr>
+				</table>
+
 				<?php submit_button(); ?>
 			</form>
 

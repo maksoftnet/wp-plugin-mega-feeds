@@ -106,7 +106,10 @@ class Images {
 		);
 	}
 
-	private static function attachment( $id ) {
+	/**
+	 * One attachment as an image array, or null when it is not an image.
+	 */
+	public static function attachment( $id ) {
 		$id = (int) $id;
 		if ( $id < 1 || 0 !== strpos( (string) get_post_mime_type( $id ), 'image/' ) ) {
 			return null;

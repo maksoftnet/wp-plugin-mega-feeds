@@ -90,6 +90,7 @@ class Source {
 			'url'         => $product->get_permalink(),
 			'currency'    => get_woocommerce_currency(),
 			'brand'       => self::brand( $product ),
+			'attributes'  => self::attributes( $product ),
 			'categories'  => self::categories( $product ),
 			'image'       => $images['main'],
 			'images'      => $images['extra'],
@@ -120,6 +121,7 @@ class Source {
 			'id'             => $item->get_id(),
 			'sku'            => (string) $item->get_sku(),
 			'price'          => (float) wc_get_price_including_tax( $item ),
+			'net_price'      => (float) wc_get_price_excluding_tax( $item ),
 			'regular_price'  => (float) wc_get_price_including_tax( $item, array( 'price' => $item->get_regular_price() ) ),
 			'in_stock'       => $item->is_in_stock(),
 			'stock_quantity' => $item->get_stock_quantity(),
@@ -128,8 +130,27 @@ class Source {
 			'size_slug'      => '',
 			'size_attribute' => '',
 			'color'          => '',
+			'own_image'      => false,
 			'modified'       => $item->get_date_modified() ? $item->get_date_modified()->getTimestamp() : 0,
 		) );
+
+		// A variation with its own picture: it becomes the main image, the
+		// parent's pictures follow as additional ones.
+		if ( $is_variation && $item->get_image_id( 'edit' ) ) {
+			$own = Images::attachment( $item->get_image_id( 'edit' ) );
+			if ( $own ) {
+				$extra = array();
+				if ( ! empty( $shared['image'] ) ) {
+					$extra[] = $shared['image'];
+				}
+				$extra = array_merge( $extra, $shared['images'] );
+				$offer['images'] = array_values( array_filter( $extra, function ( $image ) use ( $own ) {
+					return $image['url'] !== $own['url'];
+				} ) );
+				$offer['image']     = $own;
+				$offer['own_image'] = true;
+			}
+		}
 
 		foreach ( $attributes as $taxonomy => $value ) {
 			$kind = self::attribute_kind( $taxonomy );
@@ -191,6 +212,31 @@ class Source {
 			return 'brand';
 		}
 		return '';
+	}
+
+	/**
+	 * Descriptive attributes that do not vary and are not brand, size or
+	 * colour, as label => text. Feeds use them as free-form parameters.
+	 */
+	private static function attributes( \WC_Product $product ) {
+		$out = array();
+		foreach ( $product->get_attributes() as $attribute ) {
+			if ( $attribute->get_variation() || ! $attribute->get_visible() ) {
+				continue;
+			}
+			$name = $attribute->get_name();
+			if ( self::attribute_kind( $name ) ) {
+				continue;
+			}
+			$values = $attribute->is_taxonomy()
+				? wc_get_product_terms( $product->get_id(), $name, array( 'fields' => 'names' ) )
+				: $attribute->get_options();
+			$values = array_filter( array_map( 'trim', array_map( 'strval', (array) $values ) ), 'strlen' );
+			if ( $values ) {
+				$out[ wc_attribute_label( $name ) ] = implode( ', ', $values );
+			}
+		}
+		return $out;
 	}
 
 	private static function brand( \WC_Product $product ) {

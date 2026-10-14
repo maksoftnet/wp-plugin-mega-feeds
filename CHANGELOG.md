@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.3.0
+
+- Pazaruvaj XML feed at `/pazaruvaj/` (Products / Product per variant,
+  Identifier, Manufacturer, Name, ProductUrl, Price, Category with `>`,
+  ImageUrl/ImageUrl2, Description, DeliveryTime/DeliveryCost, Barcode,
+  NetPrice, Size, Color, GroupId, Attributes).
+- Colour is only sent for variants that have their own picture.
+- Sold-out items are listed with DeliveryTime NO (can be switched off).
+
 ## 0.2.0
 
 - RSS reorganised under `/rss/`: central feed ordered by last modification

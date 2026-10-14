@@ -4,7 +4,7 @@ Tags: feed, rss, export, syndication, marketplace
 Requires at least: 5.8
 Tested up to: 7.1
 Requires PHP: 7.2
-Stable tag: 0.2.0
+Stable tag: 0.3.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -20,6 +20,7 @@ Available now:
 
 * RSS 2.0 at /rss/ (newest changes), /rss/posts/, /rss/pages/, /rss/products/ with main and additional images.
 * Glami product feed at /glami/ (WooCommerce).
+* Pazaruvaj product feed at /pazaruvaj/ (WooCommerce).
 
 Planned: marketplace product feeds and further syndication formats.
 
@@ -30,6 +31,9 @@ Planned: marketplace product feeds and further syndication formats.
 3. Open Settings > Mega Feeds to find the feed URLs.
 
 == Changelog ==
+
+= 0.3.0 =
+* Pazaruvaj feed.
 
 = 0.2.0 =
 * RSS scopes, additional images, Glami feed, product limits.

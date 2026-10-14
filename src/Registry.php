@@ -3,6 +3,7 @@ namespace MegaFeeds;
 
 use MegaFeeds\Feeds\FeedInterface;
 use MegaFeeds\Feeds\Glami;
+use MegaFeeds\Feeds\Pazaruvaj;
 use MegaFeeds\Feeds\Rss;
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -25,6 +26,7 @@ class Registry {
 			$defaults = array( new Rss() );
 			if ( class_exists( 'WooCommerce' ) ) {
 				$defaults[] = new Glami();
+				$defaults[] = new Pazaruvaj();
 			}
 			$list = apply_filters( 'mega_feeds_register_feeds', $defaults );
 			self::$feeds = array();

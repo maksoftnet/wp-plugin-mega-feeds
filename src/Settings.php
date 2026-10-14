@@ -37,6 +37,13 @@ class Settings {
 			// Glami: optional single carrier block.
 			'glami_delivery_name'   => '',
 			'glami_delivery_price'  => '',
+			// Pazaruvaj: delivery days for items in stock, optional cost text,
+			// whether the SKU is sent as ProductNumber, and whether sold-out
+			// items are listed (with DeliveryTime NO).
+			'pazaruvaj_delivery_days'  => '1',
+			'pazaruvaj_delivery_cost'  => '',
+			'pazaruvaj_product_number' => 'none',
+			'pazaruvaj_include_oos'    => 1,
 		);
 	}
 
@@ -152,6 +159,12 @@ class Settings {
 		$out['glami_delivery_name']  = isset( $input['glami_delivery_name'] ) ? sanitize_text_field( $input['glami_delivery_name'] ) : '';
 		$price                       = isset( $input['glami_delivery_price'] ) ? str_replace( ',', '.', trim( $input['glami_delivery_price'] ) ) : '';
 		$out['glami_delivery_price'] = is_numeric( $price ) ? (string) $price : '';
+
+		$days = isset( $input['pazaruvaj_delivery_days'] ) ? absint( $input['pazaruvaj_delivery_days'] ) : 1;
+		$out['pazaruvaj_delivery_days']  = (string) max( 1, min( 60, $days ) );
+		$out['pazaruvaj_delivery_cost']  = isset( $input['pazaruvaj_delivery_cost'] ) ? sanitize_text_field( $input['pazaruvaj_delivery_cost'] ) : '';
+		$out['pazaruvaj_product_number'] = ( isset( $input['pazaruvaj_product_number'] ) && 'sku' === $input['pazaruvaj_product_number'] ) ? 'sku' : 'none';
+		$out['pazaruvaj_include_oos']    = ! empty( $input['pazaruvaj_include_oos'] ) ? 1 : 0;
 
 		// Settings changed: rendered feeds are stale.
 		Cache::bump();
