@@ -127,7 +127,7 @@ class Glami implements FeedInterface {
 
 		if ( '' !== $offer['size'] ) {
 			$this->param( $xml, $this->t( 'size' ), $offer['size'] );
-			$this->param( $xml, 'size_system', $this->size_system( $offer['size'] ) );
+			$this->param( $xml, 'size_system', $this->size_system( $offer ) );
 		}
 		if ( '' !== $offer['color'] ) {
 			$this->param( $xml, $this->t( 'color' ), $offer['color'] );
@@ -177,12 +177,12 @@ class Glami implements FeedInterface {
 	}
 
 	/**
-	 * International letter sizes are INT; anything else uses the configured
-	 * system (EU by default).
+	 * Letter sizes arrive as INT from the product source; everything else
+	 * uses the configured system (EU by default).
 	 */
-	private function size_system( $size ) {
-		if ( preg_match( '/^(\d?X{0,3}S|M|L|\d?X{1,3}L|XXS|XS|XL|XXL|XXXL)$/i', trim( $size ) ) ) {
-			return 'INT';
+	private function size_system( array $offer ) {
+		if ( ! empty( $offer['size_system'] ) ) {
+			return $offer['size_system'];
 		}
 		$system = (string) Settings::get( 'glami_size_system' );
 		return '' !== $system ? $system : 'EU';

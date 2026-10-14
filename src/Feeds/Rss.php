@@ -4,6 +4,7 @@ namespace MegaFeeds\Feeds;
 use MegaFeeds\Images;
 use MegaFeeds\Router;
 use MegaFeeds\Settings;
+use MegaFeeds\Text;
 
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
@@ -281,8 +282,7 @@ class Rss implements FeedInterface {
 	 * reduced to plain text, because XMLWriter does the escaping.
 	 */
 	private function text( \XMLWriter $xml, $name, $value ) {
-		$value = wp_strip_all_tags( (string) $value );
-		$value = html_entity_decode( $value, ENT_QUOTES, 'UTF-8' );
+		$value = Text::plain( $value );
 		$xml->startElement( $name );
 		$xml->text( $this->clean( $value ) );
 		$xml->endElement();

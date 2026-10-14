@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.3.1
+
+- Colour (and size) set on the product itself, not on a variation, is now
+  sent when it has exactly one value. Shops that keep one colour per product
+  previously produced no colour at all.
+- Descriptions keep a space between paragraphs and list items
+  ("Pant Trousers", not "PantTrousers"); the same applies to RSS text fields.
+- Size labels such as "L - 42 - 46" are reduced to a single size ("L") and
+  sent as the international system (INT); numeric sizes keep the configured
+  system (EU by default).
+
 ## 0.3.0
 
 - Pazaruvaj XML feed at `/pazaruvaj/` (Products / Product per variant,

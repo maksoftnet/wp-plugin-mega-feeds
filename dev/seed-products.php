@@ -208,6 +208,41 @@ foreach ( $variable as $d ) {
 	$is_new ? $created++ : $updated++;
 }
 
+// --- Shop-style quirks: colour on the product, odd size labels, 2 paragraphs --
+$quirk = mf_seed_find( 'NIK-PT-105' );
+$is_new_quirk = ! $quirk;
+if ( $is_new_quirk ) {
+	$quirk = new WC_Product_Variable();
+}
+$quirk->set_name( $t['p_tee'] . ' Quirk' );
+$quirk->set_status( 'publish' );
+$quirk->set_sku( 'NIK-PT-105' );
+$quirk->set_description( '<p>First paragraph</p><p>Second paragraph</p>' );
+$quirk->set_category_ids( array( $cat['men'], $cat['clothing'] ) );
+$quirk->set_attributes( array(
+	mf_seed_attribute( $attr['brand'], array( 'Nike' ), false ),
+	mf_seed_attribute( $attr['color'], array( $t['black'] ), false ), // product level, not a variation.
+	mf_seed_attribute( $attr['size'], array( 'M - 38 - 42', 'L- 42 - 46', '44.5' ), true ),
+) );
+$quirk_id = $quirk->save();
+foreach ( array( 'M - 38 - 42', 'L- 42 - 46', '44.5' ) as $n => $size ) {
+	$sku = 'NIK-PT-105-' . ( $n + 1 );
+	$vid = wc_get_product_id_by_sku( $sku );
+	$v   = $vid ? wc_get_product( $vid ) : new WC_Product_Variation();
+	$v->set_parent_id( $quirk_id );
+	$v->set_sku( $sku );
+	$v->set_attributes( array( $attr['size']['tax'] => sanitize_title( $size ) ) );
+	$v->set_regular_price( '39.90' );
+	$v->set_manage_stock( true );
+	$v->set_stock_quantity( 5 );
+	$v->set_stock_status( 'instock' );
+	$v->save();
+}
+WC_Product_Variable::sync( $quirk_id );
+$quirk->set_image_id( (int) wc_get_product( wc_get_product_id_by_sku( 'PUM-TS-001' ) )->get_image_id() );
+$quirk->save();
+$is_new_quirk ? $created++ : $updated++;
+
 // --- A draft: must never appear in a feed -----------------------------------
 $draft = mf_seed_find( 'DRAFT-000' );
 if ( ! $draft ) {

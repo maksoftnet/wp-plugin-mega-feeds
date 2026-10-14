@@ -2,6 +2,7 @@
 namespace MegaFeeds\Products;
 
 use MegaFeeds\Images;
+use MegaFeeds\Text;
 
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
@@ -17,7 +18,8 @@ if ( ! defined( 'ABSPATH' ) ) {
  * Offer keys:
  *   id, group_id, sku, name, description, url, price (incl. tax), regular_price,
  *   currency, in_stock, stock_quantity, brand, gtin, categories (term arrays,
- *   deepest first), size, size_slug, size_attribute, color, image (main),
+ *   deepest first), size, size_slug, size_attribute, size_system (INT or ''),
+ *   color, image (main),
  *   images (additional), modified.
  */
 class Source {
@@ -129,6 +131,7 @@ class Source {
 			'size'           => '',
 			'size_slug'      => '',
 			'size_attribute' => '',
+			'size_system'    => '',
 			'color'          => '',
 			'own_image'      => false,
 			'modified'       => $item->get_date_modified() ? $item->get_date_modified()->getTimestamp() : 0,
@@ -162,6 +165,19 @@ class Source {
 				$offer['color'] = $value['name'];
 			}
 		}
+
+		// Colour and size that belong to the product, not to a variation
+		// (one colour for every size): use them when there is exactly one.
+		if ( '' === $offer['color'] ) {
+			$offer['color'] = self::product_level_value( $parent, 'color' );
+		}
+		if ( '' === $offer['size'] ) {
+			$offer['size'] = self::product_level_value( $parent, 'size' );
+		}
+
+		$size                = Text::size( $offer['size'] );
+		$offer['size']        = $size['value'];
+		$offer['size_system'] = $size['system'];
 
 		return $offer;
 	}
@@ -210,6 +226,26 @@ class Source {
 		}
 		if ( preg_match( '/brand|marka|marki|\x{043c}\x{0430}\x{0440}\x{043a}/u', $hay ) ) {
 			return 'brand';
+		}
+		return '';
+	}
+
+	/**
+	 * The single value of a product-level attribute of the given kind
+	 * (size/color/brand), or '' when absent or ambiguous.
+	 */
+	private static function product_level_value( \WC_Product $product, $kind ) {
+		foreach ( $product->get_attributes() as $attribute ) {
+			if ( self::attribute_kind( $attribute->get_name() ) !== $kind ) {
+				continue;
+			}
+			$values = $attribute->is_taxonomy()
+				? wc_get_product_terms( $product->get_id(), $attribute->get_name(), array( 'fields' => 'names' ) )
+				: $attribute->get_options();
+			$values = array_values( array_filter( array_map( 'trim', array_map( 'strval', (array) $values ) ), 'strlen' ) );
+			if ( 1 === count( $values ) ) {
+				return $values[0];
+			}
 		}
 		return '';
 	}
@@ -304,11 +340,10 @@ class Source {
 	 */
 	private static function description( \WC_Product $product ) {
 		$text = $product->get_description();
-		if ( '' === trim( wp_strip_all_tags( $text ) ) ) {
+		if ( '' === Text::plain( $text ) ) {
 			$text = $product->get_short_description();
 		}
-		$text = wp_strip_all_tags( strip_shortcodes( $text ) );
-		$text = trim( preg_replace( '/\s+/u', ' ', html_entity_decode( $text, ENT_QUOTES, 'UTF-8' ) ) );
-		return '' !== $text ? $text : wp_strip_all_tags( $product->get_name() );
+		$text = Text::plain( $text );
+		return '' !== $text ? $text : Text::plain( $product->get_name() );
 	}
 }

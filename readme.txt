@@ -4,7 +4,7 @@ Tags: feed, rss, export, syndication, marketplace
 Requires at least: 5.8
 Tested up to: 7.1
 Requires PHP: 7.2
-Stable tag: 0.3.0
+Stable tag: 0.3.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -31,6 +31,9 @@ Planned: marketplace product feeds and further syndication formats.
 3. Open Settings > Mega Feeds to find the feed URLs.
 
 == Changelog ==
+
+= 0.3.1 =
+* Colour from product-level attributes, readable descriptions, single-size normalisation.
 
 = 0.3.0 =
 * Pazaruvaj feed.
