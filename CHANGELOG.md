@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.2
+
+- Descriptions: `<address>`, `<pre>`, definition lists and other block tags now
+  separate words too. Product copy pasted from other sites often wraps every
+  line in `<address>`, which glued words together ("PantTrousers").
+
 ## 0.3.1
 
 - Colour (and size) set on the product itself, not on a variation, is now

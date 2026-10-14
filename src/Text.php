@@ -11,11 +11,15 @@ if ( ! defined( 'ABSPATH' ) ) {
 class Text {
 
 	/**
-	 * HTML to plain text. Block-level closing tags and <br> become a space
-	 * first, so "<p>One</p><p>Two</p>" reads "One Two", not "OneTwo".
+	 * HTML to plain text. Block-level tags and <br> become a space first, so
+	 * "<p>One</p><p>Two</p>" reads "One Two", not "OneTwo".
 	 */
 	public static function plain( $html ) {
-		$html = preg_replace( '#</(p|div|li|ul|ol|h[1-6]|tr|td|th|table|blockquote|section|article)>|<br\s*/?>#i', ' ', (string) $html );
+		// Opening and closing block tags both separate words; <br> and <hr>
+		// are void. <address> and <pre> matter: pasted product copy often
+		// wraps every line in <address>.
+		$blocks = 'p|div|li|ul|ol|dl|dt|dd|h[1-6]|tr|td|th|table|thead|tbody|tfoot|caption|blockquote|section|article|aside|header|footer|nav|main|figure|figcaption|address|pre|form|fieldset|details|summary';
+		$html   = preg_replace( '#</?(?:' . $blocks . ')(?=[\s/>])[^>]*>|<(?:br|hr)(?=[\s/>])[^>]*>#i', ' ', (string) $html );
 		$text = wp_strip_all_tags( strip_shortcodes( (string) $html ) );
 		$text = html_entity_decode( $text, ENT_QUOTES, 'UTF-8' );
 		$text = preg_replace( '/\s+/u', ' ', $text );

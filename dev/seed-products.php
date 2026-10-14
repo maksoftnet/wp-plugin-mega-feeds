@@ -217,7 +217,7 @@ if ( $is_new_quirk ) {
 $quirk->set_name( $t['p_tee'] . ' Quirk' );
 $quirk->set_status( 'publish' );
 $quirk->set_sku( 'NIK-PT-105' );
-$quirk->set_description( '<p>First paragraph</p><p>Second paragraph</p>' );
+$quirk->set_description( '<p>First paragraph</p><p>Second paragraph</p><address><span>Pant</span></address><address><span>Trousers</span></address>' );
 $quirk->set_category_ids( array( $cat['men'], $cat['clothing'] ) );
 $quirk->set_attributes( array(
 	mf_seed_attribute( $attr['brand'], array( 'Nike' ), false ),
