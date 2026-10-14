@@ -15,18 +15,28 @@ class Settings {
 
 	public static function defaults() {
 		return array(
-			// Items per feed when the request does not ask for a number.
-			'limit_default' => 20,
-			// Hard ceiling: a request can never ask for more than this.
-			'limit_max'     => 100,
+			// Items per content feed when the request does not ask for a number.
+			'limit_default'         => 20,
+			// Hard ceiling for content feeds.
+			'limit_max'             => 100,
+			// Same pair for product feeds, which are meant to carry the catalogue.
+			'product_limit_default' => 1000,
+			'product_limit_max'     => 5000,
 			// Seconds a rendered feed is reused. 0 disables caching.
-			'cache_ttl'     => 300,
+			'cache_ttl'             => 300,
 			// 'full' puts the whole post in the feed, 'excerpt' only a summary.
-			'content'       => 'full',
-			// Post types that may be exported.
-			'post_types'    => array( 'post' ),
+			'content'               => 'full',
+			// Post types that may be exported. Empty means every public type.
+			'post_types'            => array(),
 			// Feed id => enabled. Feeds not listed default to enabled.
-			'feeds'         => array(),
+			'feeds'                 => array(),
+			// Glami: size system for numeric sizes (EU, UK, US, IT, ...).
+			'glami_size_system'     => 'EU',
+			// Glami: one "category-slug = Glami category path" per line.
+			'glami_category_map'    => '',
+			// Glami: optional single carrier block.
+			'glami_delivery_name'   => '',
+			'glami_delivery_price'  => '',
 		);
 	}
 
@@ -61,16 +71,46 @@ class Settings {
 	}
 
 	/**
-	 * Post types currently allowed for export, always a non-empty subset of
-	 * the available ones.
+	 * Post types currently allowed for export. An empty selection means
+	 * "everything public", so a fresh install exports posts, pages and
+	 * products without any setup.
 	 */
 	public static function allowed_post_types() {
 		$available = array_keys( self::available_post_types() );
 		$chosen    = array_values( array_intersect( (array) self::get( 'post_types' ), $available ) );
-		if ( empty( $chosen ) ) {
-			$chosen = in_array( 'post', $available, true ) ? array( 'post' ) : array_slice( $available, 0, 1 );
+		return empty( $chosen ) ? $available : $chosen;
+	}
+
+	/**
+	 * URL segment for a post type: the plural collection name, as used by
+	 * the WordPress REST API and WooCommerce (posts, pages, products).
+	 */
+	public static function scope_name( $post_type ) {
+		$name = ( 's' === substr( $post_type, -1 ) ) ? $post_type : $post_type . 's';
+		return apply_filters( 'mega_feeds_scope_name', $name, $post_type );
+	}
+
+	/**
+	 * Canonical scope name => post type, for every allowed type.
+	 */
+	public static function type_scopes() {
+		$map = array();
+		foreach ( self::allowed_post_types() as $type ) {
+			$map[ self::scope_name( $type ) ] = $type;
 		}
-		return $chosen;
+		return $map;
+	}
+
+	/**
+	 * Post types a content-feed scope covers. '' is the central feed (all
+	 * allowed types); an unknown scope returns an empty array.
+	 */
+	public static function types_for_scope( $scope ) {
+		if ( '' === $scope ) {
+			return self::allowed_post_types();
+		}
+		$map = self::type_scopes();
+		return isset( $map[ $scope ] ) ? array( $map[ $scope ] ) : array();
 	}
 
 	/**
@@ -81,25 +121,37 @@ class Settings {
 		$defaults = self::defaults();
 		$out      = array();
 
-		$limit_max = isset( $input['limit_max'] ) ? absint( $input['limit_max'] ) : $defaults['limit_max'];
-		$limit_max = max( 1, min( 500, $limit_max ) );
+		$pair = function ( $max_key, $default_key, $ceiling ) use ( $input, $defaults ) {
+			$max = isset( $input[ $max_key ] ) ? absint( $input[ $max_key ] ) : $defaults[ $max_key ];
+			$max = max( 1, min( $ceiling, $max ) );
+			$def = isset( $input[ $default_key ] ) ? absint( $input[ $default_key ] ) : $defaults[ $default_key ];
+			$def = max( 1, min( $max, $def ) );
+			return array( $max, $def );
+		};
 
-		$limit_default = isset( $input['limit_default'] ) ? absint( $input['limit_default'] ) : $defaults['limit_default'];
-		$limit_default = max( 1, min( $limit_max, $limit_default ) );
+		list( $out['limit_max'], $out['limit_default'] )                   = $pair( 'limit_max', 'limit_default', 500 );
+		list( $out['product_limit_max'], $out['product_limit_default'] )   = $pair( 'product_limit_max', 'product_limit_default', 20000 );
 
-		$out['limit_max']     = $limit_max;
-		$out['limit_default'] = $limit_default;
-		$out['cache_ttl']     = isset( $input['cache_ttl'] ) ? max( 0, min( DAY_IN_SECONDS, absint( $input['cache_ttl'] ) ) ) : $defaults['cache_ttl'];
-		$out['content']       = ( isset( $input['content'] ) && 'excerpt' === $input['content'] ) ? 'excerpt' : 'full';
+		$out['cache_ttl'] = isset( $input['cache_ttl'] ) ? max( 0, min( DAY_IN_SECONDS, absint( $input['cache_ttl'] ) ) ) : $defaults['cache_ttl'];
+		$out['content']   = ( isset( $input['content'] ) && 'excerpt' === $input['content'] ) ? 'excerpt' : 'full';
 
-		$available          = array_keys( self::available_post_types() );
-		$types              = isset( $input['post_types'] ) ? array_map( 'sanitize_key', (array) $input['post_types'] ) : array();
-		$out['post_types']  = array_values( array_intersect( $types, $available ) );
+		$available         = array_keys( self::available_post_types() );
+		$types             = isset( $input['post_types'] ) ? array_map( 'sanitize_key', (array) $input['post_types'] ) : array();
+		$out['post_types'] = array_values( array_intersect( $types, $available ) );
 
 		$out['feeds'] = array();
 		foreach ( array_keys( Registry::all() ) as $feed_id ) {
 			$out['feeds'][ $feed_id ] = ! empty( $input['feeds'][ $feed_id ] ) ? 1 : 0;
 		}
+
+		$out['glami_size_system']    = isset( $input['glami_size_system'] ) ? strtoupper( preg_replace( '/[^A-Za-z]/', '', $input['glami_size_system'] ) ) : $defaults['glami_size_system'];
+		if ( '' === $out['glami_size_system'] ) {
+			$out['glami_size_system'] = 'EU';
+		}
+		$out['glami_category_map']   = isset( $input['glami_category_map'] ) ? sanitize_textarea_field( $input['glami_category_map'] ) : '';
+		$out['glami_delivery_name']  = isset( $input['glami_delivery_name'] ) ? sanitize_text_field( $input['glami_delivery_name'] ) : '';
+		$price                       = isset( $input['glami_delivery_price'] ) ? str_replace( ',', '.', trim( $input['glami_delivery_price'] ) ) : '';
+		$out['glami_delivery_price'] = is_numeric( $price ) ? (string) $price : '';
 
 		// Settings changed: rendered feeds are stale.
 		Cache::bump();

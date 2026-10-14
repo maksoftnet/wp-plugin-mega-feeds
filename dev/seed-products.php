@@ -220,5 +220,52 @@ $draft->set_sku( 'DRAFT-000' );
 $draft->set_regular_price( '1.00' );
 $draft->save();
 
+// --- Images: generated placeholders (main + two gallery) --------------------
+require_once ABSPATH . 'wp-admin/includes/image.php';
+require_once ABSPATH . 'wp-admin/includes/file.php';
+
+/** Create a solid-colour PNG attachment with a label and return its ID. */
+function mf_seed_image( $label, $rgb, $parent_id ) {
+	if ( ! function_exists( 'imagecreatetruecolor' ) ) {
+		return 0;
+	}
+	$img = imagecreatetruecolor( 800, 800 );
+	imagefill( $img, 0, 0, imagecolorallocate( $img, $rgb[0], $rgb[1], $rgb[2] ) );
+	imagestring( $img, 5, 40, 40, $label, imagecolorallocate( $img, 255, 255, 255 ) );
+	ob_start();
+	imagepng( $img );
+	$data = ob_get_clean();
+	imagedestroy( $img );
+
+	$upload = wp_upload_bits( sanitize_file_name( $label ) . '.png', null, $data );
+	if ( ! empty( $upload['error'] ) ) {
+		return 0;
+	}
+	$id = wp_insert_attachment( array(
+		'post_mime_type' => 'image/png',
+		'post_title'     => $label,
+		'post_status'    => 'inherit',
+	), $upload['file'], $parent_id );
+	wp_update_attachment_metadata( $id, wp_generate_attachment_metadata( $id, $upload['file'] ) );
+	return (int) $id;
+}
+
+$palette = array( array( 30, 90, 160 ), array( 160, 50, 60 ), array( 40, 130, 80 ) );
+foreach ( array_merge( $simple, $variable ) as $i => $d ) {
+	$id = wc_get_product_id_by_sku( $d['sku'] );
+	$p  = $id ? wc_get_product( $id ) : null;
+	if ( ! $p || $p->get_image_id() ) {
+		continue;
+	}
+	$main = mf_seed_image( $d['sku'] . ' main', $palette[ $i % 3 ], $id );
+	$g1   = mf_seed_image( $d['sku'] . ' alt1', $palette[ ( $i + 1 ) % 3 ], $id );
+	$g2   = mf_seed_image( $d['sku'] . ' alt2', $palette[ ( $i + 2 ) % 3 ], $id );
+	if ( $main ) {
+		$p->set_image_id( $main );
+	}
+	$p->set_gallery_image_ids( array_filter( array( $g1, $g2 ) ) );
+	$p->save();
+}
+
 wc_delete_product_transients();
 echo "Products created: $created, updated: $updated\n";

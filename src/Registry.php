@@ -2,6 +2,7 @@
 namespace MegaFeeds;
 
 use MegaFeeds\Feeds\FeedInterface;
+use MegaFeeds\Feeds\Glami;
 use MegaFeeds\Feeds\Rss;
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -21,7 +22,11 @@ class Registry {
 	 */
 	public static function all() {
 		if ( null === self::$feeds ) {
-			$list = apply_filters( 'mega_feeds_register_feeds', array( new Rss() ) );
+			$defaults = array( new Rss() );
+			if ( class_exists( 'WooCommerce' ) ) {
+				$defaults[] = new Glami();
+			}
+			$list = apply_filters( 'mega_feeds_register_feeds', $defaults );
 			self::$feeds = array();
 			foreach ( (array) $list as $feed ) {
 				if ( $feed instanceof FeedInterface ) {

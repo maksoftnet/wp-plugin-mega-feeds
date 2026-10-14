@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.2.0
+
+- RSS reorganised under `/rss/`: central feed ordered by last modification
+  (`/rss/`), plus `/rss/posts/`, `/rss/pages/`, `/rss/products/` (singular
+  `post`, `page`, `product` accepted as aliases). Replaces `/mega-feeds/rss/`.
+- Items carry a main image (enclosure + `media:content isDefault`) and any
+  additional images found on the page (featured, WooCommerce gallery,
+  attachments, images in content).
+- Shared `Products\Source`: WooCommerce products flattened into per-variant
+  offers (price incl. tax, stock, brand, size, colour, categories, images).
+- Glami XML feed at `/glami/` (SHOP / SHOPITEM per variant, sold-out and
+  image-less variants skipped).
+- Product feeds use their own limits (default 1000, maximum 5000 products).
+- Settings: Glami size system, category map, delivery; product limits.
+
 ## 0.1.0
 
 - Dynamic RSS 2.0 feed at `/mega-feeds/rss/` (or `/?mega_feed=rss`).

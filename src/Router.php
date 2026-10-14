@@ -1,6 +1,8 @@
 <?php
 namespace MegaFeeds;
 
+use MegaFeeds\Feeds\FeedInterface;
+
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
@@ -8,11 +10,12 @@ if ( ! defined( 'ABSPATH' ) ) {
 /**
  * Maps a request to a feed and answers it.
  *
- * Two equivalent addresses, so a feed works with or without pretty
- * permalinks:
+ * Every feed owns a first URL segment (its path) and optional scopes:
  *
- *   /mega-feeds/rss/?limit=10&type=post
- *   /?mega_feed=rss&limit=10&type=post
+ *   /rss/                   central feed, newest changes of every type
+ *   /rss/posts/             one content type
+ *   /rss/?limit=10          bounded
+ *   /?mega_feed=rss&mega_scope=posts     the same, without pretty permalinks
  *
  * The response is produced at `parse_request`, before the main query runs, so
  * a feed hit costs one targeted query (or none, on a cache hit).
@@ -20,35 +23,44 @@ if ( ! defined( 'ABSPATH' ) ) {
 class Router {
 
 	const QUERY_VAR = 'mega_feed';
-	const BASE      = 'mega-feeds';
+	const SCOPE_VAR = 'mega_scope';
 
 	public static function hooks() {
-		add_action( 'init', array( __CLASS__, 'add_rules' ) );
+		add_action( 'init', array( __CLASS__, 'add_rules' ), 20 );
 		add_filter( 'query_vars', array( __CLASS__, 'query_vars' ) );
 		add_action( 'parse_request', array( __CLASS__, 'maybe_serve' ) );
 	}
 
+	/**
+	 * Two rules per feed. Registered at 'top' so they win over WordPress's
+	 * own legacy /rss/ alias.
+	 */
 	public static function add_rules() {
-		add_rewrite_rule(
-			'^' . self::BASE . '/([a-z0-9_-]+)/?$',
-			'index.php?' . self::QUERY_VAR . '=$matches[1]',
-			'top'
-		);
+		foreach ( Registry::all() as $id => $feed ) {
+			$path = preg_quote( trim( $feed->path(), '/' ), '#' );
+			add_rewrite_rule( '^' . $path . '/?$', 'index.php?' . self::QUERY_VAR . '=' . $id, 'top' );
+			add_rewrite_rule( '^' . $path . '/([a-z0-9_-]+)/?$', 'index.php?' . self::QUERY_VAR . '=' . $id . '&' . self::SCOPE_VAR . '=$matches[1]', 'top' );
+		}
 	}
 
 	public static function query_vars( $vars ) {
 		$vars[] = self::QUERY_VAR;
+		$vars[] = self::SCOPE_VAR;
 		return $vars;
 	}
 
 	/**
-	 * Public URL of a feed, using whichever form the site can resolve.
+	 * Public URL of a feed scope, using whichever form the site can resolve.
 	 */
-	public static function url( $feed_id, array $args = array() ) {
+	public static function url( FeedInterface $feed, $scope = '', array $args = array() ) {
 		if ( get_option( 'permalink_structure' ) ) {
-			$url = home_url( '/' . self::BASE . '/' . $feed_id . '/' );
+			$path = '/' . trim( $feed->path(), '/' ) . '/' . ( '' !== $scope ? $scope . '/' : '' );
+			$url  = home_url( $path );
 		} else {
-			$url = add_query_arg( self::QUERY_VAR, $feed_id, home_url( '/' ) );
+			$url = add_query_arg( self::QUERY_VAR, $feed->id(), home_url( '/' ) );
+			if ( '' !== $scope ) {
+				$url = add_query_arg( self::SCOPE_VAR, $scope, $url );
+			}
 		}
 		return $args ? add_query_arg( $args, $url ) : $url;
 	}
@@ -57,34 +69,37 @@ class Router {
 		if ( empty( $wp->query_vars[ self::QUERY_VAR ] ) ) {
 			return;
 		}
-		self::serve( sanitize_key( $wp->query_vars[ self::QUERY_VAR ] ) );
+		$scope = isset( $wp->query_vars[ self::SCOPE_VAR ] ) ? sanitize_key( $wp->query_vars[ self::SCOPE_VAR ] ) : '';
+		self::serve( sanitize_key( $wp->query_vars[ self::QUERY_VAR ] ), $scope );
 	}
 
 	/**
 	 * Turn the query string into a normalized, bounded argument set. Always
 	 * returns the same keys, so equal requests share one cache entry.
 	 */
-	private static function request_args() {
-		$limit_max = (int) Settings::get( 'limit_max' );
+	private static function request_args( FeedInterface $feed, $scope ) {
+		$prefix    = ( 'products' === $feed->kind() ) ? 'product_' : '';
+		$limit_max = (int) Settings::get( $prefix . 'limit_max' );
 		$limit     = isset( $_GET['limit'] ) ? absint( $_GET['limit'] ) : 0; // phpcs:ignore WordPress.Security.NonceVerification
 		if ( $limit < 1 ) {
-			$limit = (int) Settings::get( 'limit_default' );
-		}
-		$limit = max( 1, min( $limit_max, $limit ) );
-
-		$allowed = Settings::allowed_post_types();
-		$type    = isset( $_GET['type'] ) ? sanitize_key( wp_unslash( $_GET['type'] ) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification
-		if ( ! in_array( $type, $allowed, true ) ) {
-			$type = $allowed[0];
+			$limit = (int) Settings::get( $prefix . 'limit_default' );
 		}
 
 		return array(
-			'limit' => $limit,
-			'type'  => $type,
+			'limit' => max( 1, min( $limit_max, $limit ) ),
+			'scope' => $scope,
 		);
 	}
 
-	private static function serve( $feed_id ) {
+	private static function not_found() {
+		status_header( 404 );
+		nocache_headers();
+		header( 'Content-Type: text/plain; charset=utf-8' );
+		echo 'Feed not found.';
+		exit;
+	}
+
+	private static function serve( $feed_id, $raw_scope ) {
 		$method = isset( $_SERVER['REQUEST_METHOD'] ) ? strtoupper( $_SERVER['REQUEST_METHOD'] ) : 'GET';
 		if ( 'GET' !== $method && 'HEAD' !== $method ) {
 			status_header( 405 );
@@ -94,14 +109,15 @@ class Router {
 
 		$feed = Registry::get( $feed_id );
 		if ( ! $feed || ! Settings::feed_enabled( $feed_id ) ) {
-			status_header( 404 );
-			nocache_headers();
-			header( 'Content-Type: text/plain; charset=utf-8' );
-			echo 'Feed not found.';
-			exit;
+			self::not_found();
 		}
 
-		$args  = self::request_args();
+		$scope = $feed->resolve_scope( $raw_scope );
+		if ( null === $scope ) {
+			self::not_found();
+		}
+
+		$args  = self::request_args( $feed, $scope );
 		$ttl   = (int) Settings::get( 'cache_ttl' );
 		$key   = Cache::key( $feed_id, $args );
 		$entry = $ttl > 0 ? Cache::get( $key ) : null;

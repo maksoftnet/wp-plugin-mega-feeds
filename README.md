@@ -8,13 +8,17 @@ other platforms pull it.
 
 | Id | URL | Status |
 |----|-----|--------|
-| `rss` | `/mega-feeds/rss/` or `/?mega_feed=rss` | available |
-| `pazaruvaj` | - | planned |
-| `glami` | - | planned |
+| `rss` | `/rss/` newest changes of every type | available |
+| `rss` | `/rss/posts/`, `/rss/pages/`, `/rss/products/` | available |
+| `glami` | `/glami/` | available |
+| `pazaruvaj` | - | waiting for the format specification |
 | `maksoft-cms` | - | planned |
 
-Query parameters: `limit` (bounded by the configured maximum), `type` (one of
-the post types enabled in settings).
+Without pretty permalinks every address also works as
+`/?mega_feed=<id>&mega_scope=<scope>`.
+
+Query parameters: `limit`, bounded by the configured maximum (content feeds
+and product feeds have separate limits).
 
 ## Design
 
@@ -37,6 +41,8 @@ the post types enabled in settings).
     src/Registry.php         known formats
     src/Cache.php            generation + transients
     src/Settings.php         option, defaults, sanitizing
+    src/Images.php           main + additional images of a post
+    src/Products/Source.php  WooCommerce products -> per-variant offers
     src/Feeds/               one class per format
     src/Admin/               settings screen
 

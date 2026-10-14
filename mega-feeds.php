@@ -1,8 +1,8 @@
 <?php
 /**
  * Plugin Name:       Mega Feeds
- * Description:       Serve your site content as dynamic, cached feeds for aggregators, social networks and marketplaces. Starts with RSS 2.0.
- * Version:           0.1.0
+ * Description:       Serve your site content as dynamic, cached feeds for aggregators, social networks and marketplaces. RSS 2.0 and Glami so far.
+ * Version:           0.2.0
  * Requires at least: 5.8
  * Requires PHP:      7.2
  * Author:            Maksoft
@@ -19,8 +19,8 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'MEGA_FEEDS_VERSION', '0.1.0' );
-define( 'MEGA_FEEDS_DB_VERSION', '0.1.0' );
+define( 'MEGA_FEEDS_VERSION', '0.2.0' );
+define( 'MEGA_FEEDS_DB_VERSION', '0.2.0' );
 define( 'MEGA_FEEDS_FILE', __FILE__ );
 define( 'MEGA_FEEDS_DIR', plugin_dir_path( __FILE__ ) );
 

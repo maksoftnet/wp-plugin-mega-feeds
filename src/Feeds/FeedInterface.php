@@ -12,7 +12,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 interface FeedInterface {
 
 	/**
-	 * Stable slug used in the URL and in settings, e.g. "rss".
+	 * Stable slug used in settings and as the query var value, e.g. "rss".
 	 */
 	public function id();
 
@@ -22,12 +22,40 @@ interface FeedInterface {
 	public function label();
 
 	/**
+	 * First URL segment, e.g. "rss" for /rss/ and /rss/posts/.
+	 */
+	public function path();
+
+	/**
 	 * MIME type of the document, without charset.
 	 */
 	public function content_type();
 
 	/**
-	 * @param array $args Normalized request arguments (limit, type).
+	 * "content" feeds list posts/pages and use the content limits, "products"
+	 * feeds list catalogue offers and use the (larger) product limits.
+	 */
+	public function kind();
+
+	/**
+	 * Every scope the feed answers, canonical name => label. The empty
+	 * string is the feed's central address.
+	 *
+	 * @return array
+	 */
+	public function scopes();
+
+	/**
+	 * Map a raw URL segment (which may be an alias) to a canonical scope,
+	 * or null when the feed does not answer it.
+	 *
+	 * @param string $raw
+	 * @return string|null
+	 */
+	public function resolve_scope( $raw );
+
+	/**
+	 * @param array $args Normalized request arguments (limit, scope).
 	 * @return array {
 	 *     @type string $body     The complete document.
 	 *     @type int    $modified Unix time of the newest item, 0 if unknown.

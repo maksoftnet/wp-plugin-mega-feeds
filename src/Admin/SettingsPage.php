@@ -64,7 +64,6 @@ class SettingsPage {
 		$settings = Settings::all();
 		$name     = Settings::OPTION;
 		$types    = Settings::available_post_types();
-		$allowed  = Settings::allowed_post_types();
 		?>
 		<div class="wrap">
 			<h1><?php esc_html_e( 'Mega Feeds', 'mega-feeds' ); ?></h1>
@@ -87,32 +86,36 @@ class SettingsPage {
 					</thead>
 					<tbody>
 					<?php foreach ( Registry::all() as $id => $feed ) : ?>
+						<?php foreach ( $feed->scopes() as $scope => $scope_label ) : ?>
 						<tr>
 							<td>
+								<?php if ( '' === $scope ) : ?>
 								<input type="checkbox"
 									name="<?php echo esc_attr( $name ); ?>[feeds][<?php echo esc_attr( $id ); ?>]"
 									value="1" <?php checked( Settings::feed_enabled( $id ) ); ?>>
+								<?php endif; ?>
 							</td>
-							<td><?php echo esc_html( $feed->label() ); ?></td>
-							<td><a href="<?php echo esc_url( Router::url( $id ) ); ?>" target="_blank" rel="noopener"><code><?php echo esc_html( Router::url( $id ) ); ?></code></a></td>
+							<td><?php echo esc_html( $feed->label() ); ?><?php echo '' !== $scope ? ' &mdash; ' . esc_html( $scope_label ) : ''; ?></td>
+							<td><a href="<?php echo esc_url( Router::url( $feed, $scope ) ); ?>" target="_blank" rel="noopener"><code><?php echo esc_html( Router::url( $feed, $scope ) ); ?></code></a></td>
 						</tr>
+						<?php endforeach; ?>
 					<?php endforeach; ?>
 					</tbody>
 				</table>
 				<p class="description">
-					<?php esc_html_e( 'Append ?limit=N to ask for fewer items and ?type=<post type> to pick a content type.', 'mega-feeds' ); ?>
+					<?php esc_html_e( 'Append ?limit=N to ask for fewer items. Content types are selected by the path: /rss/posts/, /rss/pages/, /rss/products/.', 'mega-feeds' ); ?>
 				</p>
 
 				<h2><?php esc_html_e( 'Content', 'mega-feeds' ); ?></h2>
 				<table class="form-table" role="presentation">
 					<tr>
-						<th scope="row"><?php esc_html_e( 'Post types', 'mega-feeds' ); ?></th>
+						<th scope="row"><?php esc_html_e( 'Post types', 'mega-feeds' ); ?><p class="description" style="font-weight:400"><?php esc_html_e( 'Leave all unchecked to export every public type.', 'mega-feeds' ); ?></p></th>
 						<td>
 							<?php foreach ( $types as $slug => $type ) : ?>
 								<label style="display:block">
 									<input type="checkbox"
 										name="<?php echo esc_attr( $name ); ?>[post_types][]"
-										value="<?php echo esc_attr( $slug ); ?>" <?php checked( in_array( $slug, $allowed, true ) ); ?>>
+										value="<?php echo esc_attr( $slug ); ?>" <?php checked( in_array( $slug, (array) $settings['post_types'], true ) ); ?>>
 									<?php echo esc_html( $type->labels->name ); ?>
 								</label>
 							<?php endforeach; ?>
@@ -143,11 +146,47 @@ class SettingsPage {
 						</td>
 					</tr>
 					<tr>
+						<th scope="row"><label for="mf-plimit-default"><?php esc_html_e( 'Product feeds: default / maximum products', 'mega-feeds' ); ?></label></th>
+						<td>
+							<input id="mf-plimit-default" type="number" min="1" class="small-text"
+								name="<?php echo esc_attr( $name ); ?>[product_limit_default]" value="<?php echo esc_attr( $settings['product_limit_default'] ); ?>">
+							/
+							<input type="number" min="1" class="small-text"
+								name="<?php echo esc_attr( $name ); ?>[product_limit_max]" value="<?php echo esc_attr( $settings['product_limit_max'] ); ?>">
+							<p class="description"><?php esc_html_e( 'Counted in products; each variation of a product is one more item in the feed.', 'mega-feeds' ); ?></p>
+						</td>
+					</tr>
+					<tr>
 						<th scope="row"><label for="mf-cache-ttl"><?php esc_html_e( 'Cache (seconds)', 'mega-feeds' ); ?></label></th>
 						<td>
 							<input id="mf-cache-ttl" type="number" min="0" class="small-text"
 								name="<?php echo esc_attr( $name ); ?>[cache_ttl]" value="<?php echo esc_attr( $settings['cache_ttl'] ); ?>">
 							<p class="description"><?php esc_html_e( '0 disables caching. The cache is also cleared whenever content changes.', 'mega-feeds' ); ?></p>
+						</td>
+					</tr>
+				</table>
+
+				<h2><?php esc_html_e( 'Glami', 'mega-feeds' ); ?></h2>
+				<table class="form-table" role="presentation">
+					<tr>
+						<th scope="row"><label for="mf-glami-size"><?php esc_html_e( 'Size system', 'mega-feeds' ); ?></label></th>
+						<td><input id="mf-glami-size" type="text" class="small-text"
+							name="<?php echo esc_attr( $name ); ?>[glami_size_system]" value="<?php echo esc_attr( $settings['glami_size_system'] ); ?>">
+							<p class="description"><?php esc_html_e( 'For numeric sizes: EU, UK, US, IT ... Letter sizes (S, M, L) are sent as INT automatically.', 'mega-feeds' ); ?></p></td>
+					</tr>
+					<tr>
+						<th scope="row"><label for="mf-glami-map"><?php esc_html_e( 'Category map', 'mega-feeds' ); ?></label></th>
+						<td><textarea id="mf-glami-map" rows="6" class="large-text code"
+							name="<?php echo esc_attr( $name ); ?>[glami_category_map]"><?php echo esc_textarea( $settings['glami_category_map'] ); ?></textarea>
+							<p class="description"><?php esc_html_e( 'One per line: product-category-slug = Glami category path (with gender). Unmapped categories are sent with their store path.', 'mega-feeds' ); ?></p></td>
+					</tr>
+					<tr>
+						<th scope="row"><?php esc_html_e( 'Delivery', 'mega-feeds' ); ?></th>
+						<td>
+							<input type="text" placeholder="<?php esc_attr_e( 'Carrier', 'mega-feeds' ); ?>"
+								name="<?php echo esc_attr( $name ); ?>[glami_delivery_name]" value="<?php echo esc_attr( $settings['glami_delivery_name'] ); ?>">
+							<input type="text" class="small-text" placeholder="<?php esc_attr_e( 'Price', 'mega-feeds' ); ?>"
+								name="<?php echo esc_attr( $name ); ?>[glami_delivery_price]" value="<?php echo esc_attr( $settings['glami_delivery_price'] ); ?>">
 						</td>
 					</tr>
 				</table>
