@@ -1,0 +1,90 @@
+#!/usr/bin/env php
+<?php
+/**
+ * bin/build-zip [--allow-dirty]
+ *
+ * Builds dist/mega-feeds-<version>.zip, ready for Plugins > Add New > Upload.
+ *
+ * - The archive contains one top-level folder, "mega-feeds/", which is the
+ *   folder WordPress installs into (GitHub's "Download ZIP" would name it
+ *   after the branch instead).
+ * - Only files tracked by git are packed, so a stray local file can never
+ *   ship. Development files (dev/, bin/, dotfiles, README.md) are left out.
+ * - Refuses to build from a dirty working tree unless --allow-dirty is given,
+ *   so a release always corresponds to a commit.
+ *
+ * Needs: PHP with the zip extension and git on PATH.
+ */
+
+$root  = dirname(__DIR__);
+$slug  = 'mega-feeds';
+$allow = in_array('--allow-dirty', array_slice($argv, 1), true);
+
+// --- Version, read from the plugin header ----------------------------------
+$main = file_get_contents($root . '/' . $slug . '.php');
+if ($main === false || !preg_match('/^\s*\*\s*Version:\s*(\S+)/mi', $main, $m)) {
+	fwrite(STDERR, "Cannot read the Version header from $slug.php\n");
+	exit(1);
+}
+$version = $m[1];
+
+// --- Tracked files ---------------------------------------------------------
+chdir($root);
+$list = shell_exec('git ls-files -z');
+if ($list === null || $list === '') {
+	fwrite(STDERR, "git ls-files returned nothing - run this inside the repository.\n");
+	exit(1);
+}
+$files = array_filter(explode("\0", $list), 'strlen');
+
+$dirty = trim((string) shell_exec('git status --porcelain'));
+if ($dirty !== '' && !$allow) {
+	fwrite(STDERR, "Working tree has uncommitted changes:\n$dirty\nCommit them, or pass --allow-dirty.\n");
+	exit(1);
+}
+
+// --- Exclusions ------------------------------------------------------------
+$excludePrefixes = array('dev/', 'bin/', 'dist/', 'tests/');
+$excludeFiles    = array('.gitignore', '.gitattributes', 'README.md');
+
+$packed = array();
+foreach ($files as $file) {
+	$base = basename($file);
+	if (in_array($base, $excludeFiles, true) && strpos($file, '/') === false) {
+		continue;
+	}
+	foreach ($excludePrefixes as $prefix) {
+		if (strpos($file, $prefix) === 0) {
+			continue 2;
+		}
+	}
+	$packed[] = $file;
+}
+
+// --- Build -----------------------------------------------------------------
+if (!is_dir($root . '/dist') && !mkdir($root . '/dist', 0777, true)) {
+	fwrite(STDERR, "Cannot create dist/\n");
+	exit(1);
+}
+$target = $root . '/dist/' . $slug . '-' . $version . '.zip';
+if (is_file($target)) {
+	unlink($target);
+}
+
+$zip = new ZipArchive();
+if ($zip->open($target, ZipArchive::CREATE) !== true) {
+	fwrite(STDERR, "Cannot create $target\n");
+	exit(1);
+}
+foreach ($packed as $file) {
+	$zip->addFile($root . '/' . $file, $slug . '/' . str_replace('\\', '/', $file));
+}
+$zip->close();
+
+printf("Built %s (%d files, %s bytes)\n", $target, count($packed), number_format((int) filesize($target)));
+foreach ($packed as $file) {
+	echo '  ' . $slug . '/' . $file . "\n";
+}
+if ($dirty !== '') {
+	echo "\nWARNING: built from a dirty working tree (--allow-dirty).\n";
+}
