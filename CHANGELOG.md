@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.3.3
+
+- Feeds are stored as files in `wp-content/uploads/mega-feeds/` (document +
+  JSON metadata, written atomically, closed to direct web access) instead of
+  transients. A marketplace crawler no longer waits for a render: it always
+  gets the last stored file.
+- Background regeneration through WP-Cron: debounced after content, term,
+  stock or settings changes; hourly warm-up of every enabled feed; one cron
+  event per feed variant, each with its own time budget. A render only runs
+  inline for the very first request of a variant that has no file yet.
+- A stale file is served (`X-Mega-Feeds-Cache: STALE`) while it is refreshed;
+  files older than one day are never handed out stale.
+- Variants nobody requested for 7 days are removed.
+- Settings: "Refresh every (seconds)" replaces "Cache" (default 3600); the
+  feed table shows when each feed was generated and how long it took;
+  "Regenerate feeds now" button.
+- Stock changes (orders, imports) now invalidate feeds as well.
+
 ## 0.3.2
 
 - Descriptions: `<address>`, `<pre>`, definition lists and other block tags now

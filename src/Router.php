@@ -24,6 +24,8 @@ class Router {
 
 	const QUERY_VAR = 'mega_feed';
 	const SCOPE_VAR = 'mega_scope';
+	// A stored feed older than this is never handed out stale (one day).
+	const MAX_STALE = 86400;
 
 	public static function hooks() {
 		add_action( 'init', array( __CLASS__, 'add_rules' ), 20 );
@@ -74,13 +76,15 @@ class Router {
 	}
 
 	/**
-	 * Turn the query string into a normalized, bounded argument set. Always
-	 * returns the same keys, so equal requests share one cache entry.
+	 * Normalized, bounded argument set for a feed scope. Always returns the
+	 * same keys, so equal requests share one stored variant. $requested is
+	 * the limit asked for (0 = the configured default); it is clamped to the
+	 * configured maximum.
 	 */
-	private static function request_args( FeedInterface $feed, $scope ) {
+	public static function normalize_args( FeedInterface $feed, $scope, $requested = 0 ) {
 		$prefix    = ( 'products' === $feed->kind() ) ? 'product_' : '';
 		$limit_max = (int) Settings::get( $prefix . 'limit_max' );
-		$limit     = isset( $_GET['limit'] ) ? absint( $_GET['limit'] ) : 0; // phpcs:ignore WordPress.Security.NonceVerification
+		$limit     = (int) $requested;
 		if ( $limit < 1 ) {
 			$limit = (int) Settings::get( $prefix . 'limit_default' );
 		}
@@ -117,20 +121,55 @@ class Router {
 			self::not_found();
 		}
 
-		$args  = self::request_args( $feed, $scope );
-		$ttl   = (int) Settings::get( 'cache_ttl' );
-		$key   = Cache::key( $feed_id, $args );
-		$entry = $ttl > 0 ? Cache::get( $key ) : null;
-		$state = 'HIT';
+		$requested = isset( $_GET['limit'] ) ? absint( $_GET['limit'] ) : 0; // phpcs:ignore WordPress.Security.NonceVerification
+		$args      = self::normalize_args( $feed, $scope, $requested );
+		$ttl       = (int) Settings::get( 'cache_ttl' );
+		$key       = Store::key( $feed_id, $args );
+		$record    = $ttl > 0 ? Store::read( $key ) : null;
+		$state     = 'HIT';
+		$body      = '';
+		$meta      = array();
 
-		if ( null === $entry ) {
-			$state = $ttl > 0 ? 'MISS' : 'BYPASS';
-			$entry = $feed->render( $args );
-			Cache::set( $key, $entry, $ttl );
+		if ( $record ) {
+			$meta  = $record['meta'];
+			$age   = time() - (int) $meta['generated_at'];
+			$fresh = $meta['generation'] === Cache::generation()
+				&& ( isset( $meta['version'] ) && MEGA_FEEDS_VERSION === $meta['version'] )
+				&& $age < $ttl;
+
+			if ( ! $fresh && $age > self::MAX_STALE ) {
+				// Too old to hand out: render now.
+				$record = null;
+			} elseif ( ! $fresh ) {
+				// Serve what we have, refresh behind the scenes.
+				$state = 'STALE';
+				Regenerator::request_one( $feed_id, $scope, $args['limit'] );
+			}
 		}
 
-		$etag          = '"' . md5( $entry['body'] ) . '"';
-		$modified      = isset( $entry['modified'] ) ? (int) $entry['modified'] : 0;
+		if ( $record ) {
+			Store::touch( $key, $meta );
+			$body = ( 'HEAD' === $method ) ? '' : (string) file_get_contents( $record['body_path'] );
+		} else {
+			// First request of this variant (or storing is off): render inline.
+			$state = $ttl > 0 ? 'MISS' : 'BYPASS';
+			$entry = null;
+			if ( $ttl > 0 ) {
+				$entry = Regenerator::regenerate( $feed_id, $scope, $args['limit'] );
+			}
+			if ( null === $entry ) { // storing off, or another process holds the lock.
+				$entry = $feed->render( $args );
+			}
+			$body = $entry['body'];
+			$meta = array(
+				'etag'         => '"' . md5( $entry['body'] ) . '"',
+				'modified'     => isset( $entry['modified'] ) ? (int) $entry['modified'] : 0,
+				'generated_at' => time(),
+			);
+		}
+
+		$etag          = $meta['etag'];
+		$modified      = isset( $meta['modified'] ) ? (int) $meta['modified'] : 0;
 		$last_modified = $modified > 0 ? gmdate( 'D, d M Y H:i:s', $modified ) . ' GMT' : '';
 
 		header( 'Content-Type: ' . $feed->content_type() . '; charset=UTF-8' );
@@ -138,7 +177,10 @@ class Router {
 		if ( $last_modified ) {
 			header( 'Last-Modified: ' . $last_modified );
 		}
-		header( 'Cache-Control: public, max-age=' . max( 0, $ttl ) );
+		header( 'Cache-Control: public, max-age=' . max( 0, min( $ttl, 600 ) ) );
+		if ( ! empty( $meta['generated_at'] ) ) {
+			header( 'X-Mega-Feeds-Generated: ' . gmdate( 'c', (int) $meta['generated_at'] ) );
+		}
 		header( 'X-Mega-Feeds-Cache: ' . $state );
 		header( 'X-Content-Type-Options: nosniff' );
 
@@ -149,7 +191,7 @@ class Router {
 
 		status_header( 200 );
 		if ( 'HEAD' !== $method ) {
-			echo $entry['body']; // phpcs:ignore WordPress.Security.EscapeOutput -- rendered, escaped XML.
+			echo $body; // phpcs:ignore WordPress.Security.EscapeOutput -- rendered, escaped XML.
 		}
 		exit;
 	}

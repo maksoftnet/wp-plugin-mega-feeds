@@ -22,8 +22,9 @@ class Settings {
 			// Same pair for product feeds, which are meant to carry the catalogue.
 			'product_limit_default' => 1000,
 			'product_limit_max'     => 5000,
-			// Seconds a rendered feed is reused. 0 disables caching.
-			'cache_ttl'             => 300,
+			// Seconds before a stored feed is refreshed in the background (it is
+			// also refreshed whenever content changes). 0 disables storing.
+			'cache_ttl'             => 3600,
 			// 'full' puts the whole post in the feed, 'excerpt' only a summary.
 			'content'               => 'full',
 			// Post types that may be exported. Empty means every public type.

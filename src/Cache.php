@@ -6,16 +6,14 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 /**
- * Rendered-feed cache.
+ * Freshness token for stored feeds.
  *
- * Entries live in transients, which WordPress transparently routes to a
- * persistent object cache (Redis, Memcached, ...) when one is installed and
- * to the options table otherwise - so any caching mechanism present on the
- * site is used without this plugin knowing about it.
- *
- * Invalidation is generation based: every key embeds a generation token, and
- * "clearing the cache" is just moving the token. Stale entries are never
- * deleted explicitly, they simply stop being addressed and expire by TTL.
+ * Feeds themselves live on disk (see Store). What this class owns is the
+ * "generation": a token that moves whenever something a feed shows may have
+ * changed - a post is saved, trashed or deleted, a term or the site title
+ * changes, settings are saved. A stored feed carries the generation it was
+ * rendered under; when the two differ the file is stale and is refreshed in
+ * the background (see Regenerator). Nothing is deleted on invalidation.
  */
 class Cache {
 
@@ -30,6 +28,12 @@ class Cache {
 		add_action( 'delete_term', array( __CLASS__, 'bump' ) );
 		add_action( 'update_option_blogname', array( __CLASS__, 'bump' ) );
 		add_action( 'update_option_blogdescription', array( __CLASS__, 'bump' ) );
+		// WooCommerce changes that do not go through save_post: stock and
+		// price edited from orders, imports and the quick-edit screens.
+		add_action( 'woocommerce_product_set_stock', array( __CLASS__, 'bump' ) );
+		add_action( 'woocommerce_variation_set_stock', array( __CLASS__, 'bump' ) );
+		add_action( 'woocommerce_product_set_stock_status', array( __CLASS__, 'bump' ) );
+		add_action( 'woocommerce_variation_set_stock_status', array( __CLASS__, 'bump' ) );
 	}
 
 	public static function on_save_post( $post_id, $post = null ) {
@@ -42,33 +46,24 @@ class Cache {
 	public static function generation() {
 		$generation = get_option( self::GENERATION_OPTION );
 		if ( ! $generation ) {
-			$generation = self::bump();
+			$generation = self::bump( false );
 		}
 		return (string) $generation;
 	}
 
-	public static function bump() {
+	/**
+	 * Move the token. Also announces the change so the Regenerator can
+	 * schedule a refresh (debounced there).
+	 *
+	 * @param bool|mixed $announce Hook callbacks pass their own arguments
+	 *                             here, so anything but false announces.
+	 */
+	public static function bump( $announce = true ) {
 		$generation = (string) microtime( true );
 		update_option( self::GENERATION_OPTION, $generation, true );
-		return $generation;
-	}
-
-	public static function key( $feed_id, array $args ) {
-		ksort( $args );
-		return 'mf_' . md5( wp_json_encode( array( $feed_id, $args, self::generation(), MEGA_FEEDS_VERSION, Settings::get( 'content' ) ) ) );
-	}
-
-	/**
-	 * @return array|null Cached entry (body, modified) or null on a miss.
-	 */
-	public static function get( $key ) {
-		$entry = get_transient( $key );
-		return ( is_array( $entry ) && isset( $entry['body'] ) ) ? $entry : null;
-	}
-
-	public static function set( $key, array $entry, $ttl ) {
-		if ( $ttl > 0 ) {
-			set_transient( $key, $entry, $ttl );
+		if ( false !== $announce ) {
+			do_action( 'mega_feeds_invalidated' );
 		}
+		return $generation;
 	}
 }

@@ -21,6 +21,7 @@ class Plugin {
 
 		Router::hooks();
 		Cache::hooks();
+		Regenerator::hooks();
 
 		if ( is_admin() ) {
 			Admin\SettingsPage::hooks();

@@ -25,8 +25,16 @@ and product feeds have separate limits).
 - **Dynamic, bounded, cached.** A feed is rendered per request, never more than
   `limit_max` items, and reused from a transient (which WordPress routes to a
   persistent object cache when the site has one).
-- **Generation-based invalidation.** Saving, trashing or deleting content, term
-  changes and settings changes move one generation token; nothing is deleted.
+- **Stored on disk, refreshed in the background.** Each feed variant is a
+  file pair in `wp-content/uploads/mega-feeds/`. Requests are answered from the
+  file (`HIT`); when content changed or the file is older than the refresh
+  interval it is still served (`STALE`) while WP-Cron renders a new one. Only
+  a variant with no file at all is rendered inline.
+- **Generation token.** Saving, trashing or deleting content, term, stock and
+  settings changes move one token; a file rendered under an older token is
+  stale. Nothing is deleted on invalidation.
+- **Debounced.** A burst of edits schedules one refresh, 15 seconds after the
+  last change.
 - **Conditional GET.** `ETag`, `Last-Modified`, `304`, `HEAD`. The document is
   byte-stable while content is unchanged.
 - **One class per format.** Implement `MegaFeeds\Feeds\FeedInterface` and
@@ -50,3 +58,16 @@ and product feeds have separate limits).
 
 WordPress 5.8+, PHP 7.2+. Developed in the Maksoft WP fleet lab
 (`wp/plugins/mega-feeds`, linked into the `delta` slot).
+
+## Operations
+
+WP-Cron runs when the site gets a visit. For a feed that marketplaces poll,
+prefer a real cron that calls WP-Cron on a schedule, and disable the
+page-triggered one in `wp-config.php`:
+
+    define( 'DISABLE_WP_CRON', true );
+
+    */5 * * * * wget -q -O - https://example.com/wp-cron.php?doing_wp_cron >/dev/null 2>&1
+
+Response headers: `X-Mega-Feeds-Cache` (`HIT`, `STALE`, `MISS`, `BYPASS`) and
+`X-Mega-Feeds-Generated` (when the served file was rendered).

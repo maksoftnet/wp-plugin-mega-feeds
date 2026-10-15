@@ -2,9 +2,11 @@
 namespace MegaFeeds\Admin;
 
 use MegaFeeds\Cache;
+use MegaFeeds\Regenerator;
 use MegaFeeds\Registry;
 use MegaFeeds\Router;
 use MegaFeeds\Settings;
+use MegaFeeds\Store;
 
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
@@ -23,6 +25,7 @@ class SettingsPage {
 		add_action( 'admin_menu', array( __CLASS__, 'menu' ) );
 		add_action( 'admin_init', array( __CLASS__, 'register' ) );
 		add_action( 'admin_post_mega_feeds_flush', array( __CLASS__, 'flush_cache' ) );
+		add_action( 'admin_post_mega_feeds_regenerate', array( __CLASS__, 'regenerate_now' ) );
 	}
 
 	public static function menu() {
@@ -57,6 +60,17 @@ class SettingsPage {
 		exit;
 	}
 
+	public static function regenerate_now() {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die( esc_html__( 'You are not allowed to do this.', 'mega-feeds' ), 403 );
+		}
+		check_admin_referer( 'mega_feeds_regenerate' );
+		Cache::bump( false );
+		Regenerator::run_all();
+		wp_safe_redirect( add_query_arg( array( 'page' => self::SLUG, 'regenerating' => 1 ), admin_url( 'options-general.php' ) ) );
+		exit;
+	}
+
 	public static function render() {
 		if ( ! current_user_can( 'manage_options' ) ) {
 			return;
@@ -67,6 +81,10 @@ class SettingsPage {
 		?>
 		<div class="wrap">
 			<h1><?php esc_html_e( 'Mega Feeds', 'mega-feeds' ); ?></h1>
+
+			<?php if ( ! empty( $_GET['regenerating'] ) ) : // phpcs:ignore WordPress.Security.NonceVerification ?>
+				<div class="notice notice-success is-dismissible"><p><?php esc_html_e( 'Feeds are being regenerated in the background.', 'mega-feeds' ); ?></p></div>
+			<?php endif; ?>
 
 			<?php if ( ! empty( $_GET['flushed'] ) ) : // phpcs:ignore WordPress.Security.NonceVerification ?>
 				<div class="notice notice-success is-dismissible"><p><?php esc_html_e( 'Feed cache cleared.', 'mega-feeds' ); ?></p></div>
@@ -82,6 +100,7 @@ class SettingsPage {
 							<th style="width:90px"><?php esc_html_e( 'Enabled', 'mega-feeds' ); ?></th>
 							<th><?php esc_html_e( 'Format', 'mega-feeds' ); ?></th>
 							<th><?php esc_html_e( 'URL', 'mega-feeds' ); ?></th>
+							<th style="width:200px"><?php esc_html_e( 'Last generated', 'mega-feeds' ); ?></th>
 						</tr>
 					</thead>
 					<tbody>
@@ -97,6 +116,22 @@ class SettingsPage {
 							</td>
 							<td><?php echo esc_html( $feed->label() ); ?><?php echo '' !== $scope ? ' &mdash; ' . esc_html( $scope_label ) : ''; ?></td>
 							<td><a href="<?php echo esc_url( Router::url( $feed, $scope ) ); ?>" target="_blank" rel="noopener"><code><?php echo esc_html( Router::url( $feed, $scope ) ); ?></code></a></td>
+							<td>
+								<?php
+								$stored = Store::read( Store::key( $id, Router::normalize_args( $feed, $scope, 0 ) ) );
+								if ( $stored ) {
+									echo esc_html( sprintf(
+										/* translators: 1: time difference, 2: seconds to render, 3: size in KB */
+										__( '%1$s ago (%2$s s, %3$s KB)', 'mega-feeds' ),
+										human_time_diff( (int) $stored['meta']['generated_at'] ),
+										isset( $stored['meta']['duration'] ) ? $stored['meta']['duration'] : '-',
+										number_format_i18n( ( isset( $stored['meta']['bytes'] ) ? $stored['meta']['bytes'] : 0 ) / 1024, 0 )
+									) );
+								} else {
+									esc_html_e( 'Not generated yet', 'mega-feeds' );
+								}
+								?>
+							</td>
 						</tr>
 						<?php endforeach; ?>
 					<?php endforeach; ?>
@@ -157,11 +192,11 @@ class SettingsPage {
 						</td>
 					</tr>
 					<tr>
-						<th scope="row"><label for="mf-cache-ttl"><?php esc_html_e( 'Cache (seconds)', 'mega-feeds' ); ?></label></th>
+						<th scope="row"><label for="mf-cache-ttl"><?php esc_html_e( 'Refresh every (seconds)', 'mega-feeds' ); ?></label></th>
 						<td>
 							<input id="mf-cache-ttl" type="number" min="0" class="small-text"
 								name="<?php echo esc_attr( $name ); ?>[cache_ttl]" value="<?php echo esc_attr( $settings['cache_ttl'] ); ?>">
-							<p class="description"><?php esc_html_e( '0 disables caching. The cache is also cleared whenever content changes.', 'mega-feeds' ); ?></p>
+							<p class="description"><?php esc_html_e( 'A stored feed is also refreshed in the background whenever content changes. 0 turns storing off and renders every request.', 'mega-feeds' ); ?></p>
 						</td>
 					</tr>
 				</table>
@@ -221,7 +256,12 @@ class SettingsPage {
 				<?php submit_button(); ?>
 			</form>
 
-			<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+			<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="display:inline-block;margin-right:8px">
+				<input type="hidden" name="action" value="mega_feeds_regenerate">
+				<?php wp_nonce_field( 'mega_feeds_regenerate' ); ?>
+				<?php submit_button( __( 'Regenerate feeds now', 'mega-feeds' ), 'secondary', 'submit', false ); ?>
+			</form>
+			<form method="post" style="display:inline-block" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
 				<input type="hidden" name="action" value="mega_feeds_flush">
 				<?php wp_nonce_field( 'mega_feeds_flush' ); ?>
 				<?php submit_button( __( 'Clear feed cache', 'mega-feeds' ), 'secondary', 'submit', false ); ?>
